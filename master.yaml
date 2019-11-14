@@ -1,0 +1,211 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  InstanceType:
+    Type: String
+    Default: m5.xlarge
+  ReleaseLabel:
+    Type: String
+    Default: emr-5.27.0
+  ProjectName:
+    Type: String
+    Default: big-data-api
+  vpcCidrBlock:
+    Type: String
+    Default: 10.0.0.0/16
+
+Resources:
+
+  vpc:
+    Type: "AWS::EC2::VPC"
+    Properties: 
+      CidrBlock: !Ref vpcCidrBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        -
+          Key: Name
+          Value: !Ref ProjectName
+
+  privateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref vpc
+      CidrBlock: !Select [0, !Cidr [!Ref vpcCidrBlock, 6, 4]]
+      AvailabilityZone: !Join [ "", [ !Ref "AWS::Region", a ] ]
+      Tags:
+        -
+          Key: Name
+          Value: !Join [ "", [ !Ref ProjectName, "-", "private-", a ] ]
+
+  privateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref vpc
+      CidrBlock: !Select [1, !Cidr [!Ref vpcCidrBlock, 6, 4]]
+      AvailabilityZone: !Join [ "", [ !Ref "AWS::Region", b ] ]
+      Tags:
+        -
+          Key: Name
+          Value: !Join [ "", [ !Ref ProjectName, "-", "private-", b ] ]
+
+
+  privateRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref vpc
+      Tags:
+        -
+          Key: Name
+          Value: !Join [ "", [ !Ref ProjectName, "-", "private" ] ]
+
+  PrivateSubnetAssA:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref privateRouteTable
+      SubnetId: !Ref privateSubnetA
+
+  PrivateSubnetAssB:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref privateRouteTable
+      SubnetId: !Ref privateSubnetB
+
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - '*'
+            Resource:
+              - '*'
+      RouteTableIds: 
+        - !Ref privateRouteTable
+      ServiceName: !Join [ '', [ 'com.amazonaws.', !Ref 'AWS::Region', '.s3' ] ]
+      VpcId: !Ref vpc
+
+  cluster:
+    Type: 'AWS::EMR::Cluster'
+    Properties:
+      Applications:
+        - Name: Presto
+      Instances:
+        MasterInstanceGroup:
+          InstanceCount: 1
+          InstanceType: !Ref InstanceType
+          Market: ON_DEMAND
+          Name: cfnMaster
+        CoreInstanceGroup:
+          InstanceCount: 1
+          InstanceType: !Ref InstanceType
+          Market: ON_DEMAND
+          Name: cfnCore
+        Ec2SubnetId: !Ref privateSubnetA
+      Name: CFNtest
+      JobFlowRole: !Ref emrEc2InstanceProfile
+      ServiceRole: !Ref emrRole
+      ReleaseLabel: !Ref ReleaseLabel
+      VisibleToAllUsers: true
+      Tags:
+        - Key: Name
+          Value: !Ref ProjectName
+
+  emrRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2008-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: elasticmapreduce.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceRole'
+
+  emrEc2Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2008-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceforEC2Role'
+
+  emrEc2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref emrEc2Role
+
+  LambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'lambda.amazonaws.com'
+          Action:
+          - 'sts:AssumeRole'
+      Path: '/'
+      ManagedPolicyArns: # TODO get rid of managed policy
+      - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+
+  lambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Appserver Instances
+      VpcId: !Ref vpc
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [ !Ref ProjectName, 'Glue' ] ]
+
+  SecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref lambdaSecurityGroup
+      IpProtocol: -1
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !Ref lambdaSecurityGroup
+
+  LambdaFunction: # needs no monitoring because it is used as a custom resource
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: |
+          import json
+          
+          def lambda_handler(event, context):
+              # TODO implement
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Hello from Lambda!')
+              }
+      Handler: 'index.lambda_handler'
+      MemorySize: 128
+      Role: !GetAtt 'LambdaRole.Arn'
+      Runtime: 'python3.7'
+      Timeout: 60
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref lambdaSecurityGroup
+        SubnetIds:
+          - !Ref privateSubnetA
