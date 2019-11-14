@@ -12,8 +12,6 @@ Parameters:
   vpcCidrBlock:
     Type: String
     Default: 10.0.0.0/16
-  KeyPair:
-    Type: "AWS::EC2::KeyPair::KeyName"
 
 Mappings: 
   RegionMap: 
@@ -23,59 +21,6 @@ Mappings:
       "HVM64": "ami-00e8b55a2e841be44"
 
 Resources:
-
-########
-
-  NAT:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId:
-        Fn::GetAtt:
-        - EIP
-        - AllocationId
-      SubnetId:
-        Ref: publicSubnetA
-      Tags:
-      - Key: Name
-        Value: !Ref ProjectName
-
-  EIP:
-    DependsOn: attachIgwVpc
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-
-  privateRouteTable:
-    Type: "AWS::EC2::RouteTable"
-    Properties:
-      VpcId: !Ref vpc
-      Tags:
-        -
-          Key: Name
-          Value: !Join [ "", [ !Ref ProjectName, "-", "private" ] ]
-
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId:
-        Ref: privateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId:
-        Ref: NAT
-
-  PrivateSubnetAssA:
-    Type: "AWS::EC2::SubnetRouteTableAssociation"
-    Properties:
-      RouteTableId: !Ref privateRouteTable
-      SubnetId: !Ref privateSubnetA
-
-  PrivateSubnetAssB:
-    Type: "AWS::EC2::SubnetRouteTableAssociation"
-    Properties:
-      RouteTableId: !Ref privateRouteTable
-      SubnetId: !Ref privateSubnetB
-
-############
 
   vpc:
     Type: "AWS::EC2::VPC"
@@ -88,96 +33,6 @@ Resources:
           Key: Name
           Value: !Ref ProjectName
 
-  publicSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      MapPublicIpOnLaunch: true
-      VpcId: !Ref vpc
-      CidrBlock: !Select [2, !Cidr [!Ref vpcCidrBlock, 6, 4]]
-      AvailabilityZone: !Join [ "", [ !Ref "AWS::Region", a ] ]
-      Tags:
-        -
-          Key: Name
-          Value: !Join [ "", [ !Ref ProjectName, "-", "public-", a ] ]
-
-  publicSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      MapPublicIpOnLaunch: true
-      VpcId: !Ref vpc
-      CidrBlock: !Select [3, !Cidr [!Ref vpcCidrBlock, 6, 4]]
-      AvailabilityZone: !Join [ "", [ !Ref "AWS::Region", b ] ]
-      Tags:
-        -
-          Key: Name
-          Value: !Join [ "", [ !Ref ProjectName, "-", "public-", b ] ]
-
-  internetGateway:
-    Type: "AWS::EC2::InternetGateway"
-    Properties:
-      Tags:
-        -
-          Key: Name
-          Value: !Ref ProjectName
-
-  attachIgwVpc:
-    Type: "AWS::EC2::VPCGatewayAttachment"
-    Properties:
-      InternetGatewayId: !Ref internetGateway
-      VpcId: !Ref vpc
-
-  publicRouteTable:
-    Type: "AWS::EC2::RouteTable"
-    Properties:
-      VpcId: !Ref vpc
-      Tags:
-        -
-          Key: Name
-          Value: !Join [ "", [ !Ref ProjectName, "-", "public" ] ]
-
-  route:
-    Type: "AWS::EC2::Route"
-    Properties:
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref internetGateway
-      RouteTableId: !Ref publicRouteTable
-
-  subnetAssA:
-    Type: "AWS::EC2::SubnetRouteTableAssociation"
-    Properties:
-      RouteTableId: !Ref publicRouteTable
-      SubnetId: !Ref publicSubnetA
-
-  subnetAssB:
-    Type: "AWS::EC2::SubnetRouteTableAssociation"
-    Properties:
-      RouteTableId: !Ref publicRouteTable
-      SubnetId: !Ref publicSubnetB
-
-  Ec2SSMInstanceRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          -
-            Effect: "Allow"
-            Principal:
-              Service:
-                - "ec2.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
-
-  Ec2SSMInstanceProfile:
-    Type: "AWS::IAM::InstanceProfile"
-    Properties:
-      Path: "/"
-      Roles:
-        - !Ref Ec2SSMInstanceRole
-
   Ec2SecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
@@ -189,26 +44,12 @@ Resources:
         ToPort: '22'
         CidrIp: 0.0.0.0/0
 
-  BastionInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", HVM64]
-      KeyName: !Ref KeyPair
-      InstanceType: t2.micro
-      SubnetId: !Ref publicSubnetA
-      IamInstanceProfile: !Ref Ec2SSMInstanceProfile
-      SecurityGroupIds:
-        - !GetAtt Ec2SecurityGroup.GroupId
-      Tags:
-        - Key: Name
-          Value: !Ref ProjectName
-
   privateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       MapPublicIpOnLaunch: true
       VpcId: !Ref vpc
-      CidrBlock: !Select [0, !Cidr [!Ref vpcCidrBlock, 6, 4]]
+      CidrBlock: !Select [0, !Cidr [!Ref vpcCidrBlock, 6, 8]]
       AvailabilityZone: !Join [ "", [ !Ref "AWS::Region", a ] ]
       Tags:
         -
@@ -220,7 +61,7 @@ Resources:
     Properties:
       MapPublicIpOnLaunch: true
       VpcId: !Ref vpc
-      CidrBlock: !Select [1, !Cidr [!Ref vpcCidrBlock, 6, 4]]
+      CidrBlock: !Select [1, !Cidr [!Ref vpcCidrBlock, 6, 8]]
       AvailabilityZone: !Join [ "", [ !Ref "AWS::Region", b ] ]
       Tags:
         -
@@ -249,6 +90,17 @@ Resources:
       RouteTableId: !Ref privateRouteTable
       SubnetId: !Ref privateSubnetB
 
+  VPCIdInterfaceEndpointsSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "Interface Endpoints"
+      VpcId: !Ref vpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
+        CidrIp: !Ref vpcCidrBlock
+
   S3Endpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -265,6 +117,71 @@ Resources:
         - !Ref privateRouteTable
       ServiceName: !Join [ '', [ 'com.amazonaws.', !Ref 'AWS::Region', '.s3' ] ]
       VpcId: !Ref vpc
+
+  ec2Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref vpc
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: 
+        - !Ref privateSubnetA
+        - !Ref privateSubnetB
+      SecurityGroupIds:
+        - !Ref VPCIdInterfaceEndpointsSecurityGroup
+
+  ec2MessenegesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref vpc
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: 
+        - !Ref privateSubnetA
+        - !Ref privateSubnetB
+      SecurityGroupIds:
+        - !Ref VPCIdInterfaceEndpointsSecurityGroup
+
+  ssmEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref vpc
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: 
+        - !Ref privateSubnetA
+        - !Ref privateSubnetB
+      SecurityGroupIds:
+        - !Ref VPCIdInterfaceEndpointsSecurityGroup
+
+  ssmMessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref vpc
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: 
+        - !Ref privateSubnetA
+        - !Ref privateSubnetB
+      SecurityGroupIds:
+        - !Ref VPCIdInterfaceEndpointsSecurityGroup
+
+  glueEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref vpc
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.glue'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref privateSubnetA
+        - !Ref privateSubnetB
+      SecurityGroupIds:
+        - !Ref VPCIdInterfaceEndpointsSecurityGroup
 
   cluster:
     Type: 'AWS::EMR::Cluster'
@@ -295,7 +212,6 @@ Resources:
           Market: ON_DEMAND
           Name: cfnCore
         Ec2SubnetId: !Ref privateSubnetA
-        Ec2KeyName: !Ref KeyPair
         AdditionalSlaveSecurityGroups:
           - !Ref emrSecurityGroup
         AdditionalMasterSecurityGroups:
@@ -338,6 +254,7 @@ Resources:
       Path: /
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceforEC2Role'
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
 
   emrEc2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
@@ -401,15 +318,8 @@ Resources:
     Type: 'AWS::Lambda::Function'
     Properties:
       Code:
-        ZipFile: |
-          import json
-          
-          def lambda_handler(event, context):
-              # TODO implement
-              return {
-                  'statusCode': 200,
-                  'body': json.dumps('Hello from Lambda!')
-              }
+        S3Bucket: cjl-eu-west-2
+        S3Key: LambdaFunctions/lambda.zip
       Handler: 'index.lambda_handler'
       MemorySize: 128
       Role: !GetAtt 'LambdaRole.Arn'
@@ -549,3 +459,49 @@ Resources:
         Ref: GreetingApi
       MethodResponses:
       - StatusCode: 200
+
+  glueRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "glue.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: "root"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action: "s3:*"
+                Resource: "*"
+
+  gdeltDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: gdelt
+        Description: "AWS Glue container to hold metadata tables for the gdelt data"
+
+  Crawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: "gdelt crawler"
+      Role: !GetAtt glueRole.Arn
+      DatabaseName: gdelt
+      Targets:
+        S3Targets:
+          - Path: "s3://gdelt-open-data"
+      SchemaChangePolicy:
+        UpdateBehavior: "UPDATE_IN_DATABASE"
+        DeleteBehavior: "LOG"
