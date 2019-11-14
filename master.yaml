@@ -14,6 +14,9 @@ Parameters:
     Default: 10.0.0.0/16
   KeyPair:
     Type: "AWS::EC2::KeyPair::KeyName"
+  Ami:
+    Type: String
+    Default: ami-00e8b55a2e841be44
 
 Resources:
 
@@ -94,19 +97,54 @@ Resources:
       RouteTableId: !Ref publicRouteTable
       SubnetId: !Ref publicSubnetB
 
-      #  BastionInstance:
-      #    Type: AWS::EC2::Instance
-      #    Properties:
-      #      ImageId: !Ref Ami
-      #      KeyName: !Ref KeyPair
-      #      InstanceType: t2.micro
-      #      SubnetId: !Ref publicSubnetA
-      #      IamInstanceProfile: !Ref Ec2SSMInstanceProfile
-      #      SecurityGroupIds:
-      #        - !GetAtt EndpointInstanceSecurityRoute.GroupId
-      #      Tags:
-      #        - Key: Name
-      #          Value: EndpointPrivateInstance
+  Ec2SSMInstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+
+  Ec2SSMInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref Ec2SSMInstanceRole
+
+  Ec2SecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "EC2 SSH Access"
+      VpcId: !Ref vpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref Ami
+      KeyName: !Ref KeyPair
+      InstanceType: t2.micro
+      SubnetId: !Ref publicSubnetA
+      IamInstanceProfile: !Ref Ec2SSMInstanceProfile
+      SecurityGroupIds:
+        - !GetAtt Ec2SecurityGroup.GroupId
+      Tags:
+        - Key: Name
+          Value: !Ref ProjectName
 
   privateSubnetA:
     Type: AWS::EC2::Subnet
