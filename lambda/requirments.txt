@@ -1,0 +1,2 @@
+requests
+presto-python-client

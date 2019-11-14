@@ -24,6 +24,59 @@ Mappings:
 
 Resources:
 
+########
+
+  NAT:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - EIP
+        - AllocationId
+      SubnetId:
+        Ref: publicSubnetA
+      Tags:
+      - Key: Name
+        Value: !Ref ProjectName
+
+  EIP:
+    DependsOn: attachIgwVpc
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  privateRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref vpc
+      Tags:
+        -
+          Key: Name
+          Value: !Join [ "", [ !Ref ProjectName, "-", "private" ] ]
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: privateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NAT
+
+  PrivateSubnetAssA:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref privateRouteTable
+      SubnetId: !Ref privateSubnetA
+
+  PrivateSubnetAssB:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref privateRouteTable
+      SubnetId: !Ref privateSubnetB
+
+############
+
   vpc:
     Type: "AWS::EC2::VPC"
     Properties: 
@@ -218,6 +271,18 @@ Resources:
     Properties:
       Applications:
         - Name: Presto
+        - Name: Hive
+        - Name: Hadoop
+      Configurations:
+      - Classification: hive-site
+        ConfigurationProperties:
+          hive.metastore.client.factory.class: com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory
+      - Classification: presto-connector-hive
+        ConfigurationProperties:
+          hive.metastore.glue.datacatalog.enabled: 'true'
+      - Classification: spark-hive-site
+        ConfigurationProperties:
+          hive.metastore.client.factory.class: com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory
       Instances:
         MasterInstanceGroup:
           InstanceCount: 1
