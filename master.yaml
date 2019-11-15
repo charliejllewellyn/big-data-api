@@ -551,18 +551,157 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
-        Name: gdelt
+        Name: gdeltcf
         Description: "AWS Glue container to hold metadata tables for the gdelt data"
 
-  Crawler:
-    Type: AWS::Glue::Crawler
+  gdeltTable:
+    Type: "AWS::Glue::Table"
     Properties:
-      Name: "gdelt crawler"
-      Role: !GetAtt glueRole.Arn
-      DatabaseName: gdelt
-      Targets:
-        S3Targets:
-          - Path: "s3://gdelt-open-data/"
-      SchemaChangePolicy:
-        UpdateBehavior: "UPDATE_IN_DATABASE"
-        DeleteBehavior: "LOG"
+      DatabaseName: gdeltcf
+      CatalogId: !Ref AWS::AccountId
+      TableInput:
+        Name: events
+        Owner: hadoop
+        Retention: 0
+        StorageDescriptor:
+          Columns:
+          - Name: globaleventid
+            Type: int
+          - Name: day
+            Type: int
+          - Name: monthyear
+            Type: int
+          - Name: year
+            Type: int
+          - Name: fractiondate
+            Type: float
+          - Name: actor1code
+            Type: string
+          - Name: actor1name
+            Type: string
+          - Name: actor1countrycode
+            Type: string
+          - Name: actor1knowngroupcode
+            Type: string
+          - Name: actor1ethniccode
+            Type: string
+          - Name: actor1religion1code
+            Type: string
+          - Name: actor1religion2code
+            Type: string
+          - Name: actor1type1code
+            Type: string
+          - Name: actor1type2code
+            Type: string
+          - Name: actor1type3code
+            Type: string
+          - Name: actor2code
+            Type: string
+          - Name: actor2name
+            Type: string
+          - Name: actor2countrycode
+            Type: string
+          - Name: actor2knowngroupcode
+            Type: string
+          - Name: actor2ethniccode
+            Type: string
+          - Name: actor2religion1code
+            Type: string
+          - Name: actor2religion2code
+            Type: string
+          - Name: actor2type1code
+            Type: string
+          - Name: actor2type2code
+            Type: string
+          - Name: actor2type3code
+            Type: string
+          - Name: isrootevent
+            Type: boolean
+          - Name: eventcode
+            Type: string
+          - Name: eventbasecode
+            Type: string
+          - Name: eventrootcode
+            Type: string
+          - Name: quadclass
+            Type: int
+          - Name: goldsteinscale
+            Type: float
+          - Name: nummentions
+            Type: int
+          - Name: numsources
+            Type: int
+          - Name: numarticles
+            Type: int
+          - Name: avgtone
+            Type: float
+          - Name: actor1geo_type
+            Type: int
+          - Name: actor1geo_fullname
+            Type: string
+          - Name: actor1geo_countrycode
+            Type: string
+          - Name: actor1geo_adm1code
+            Type: string
+          - Name: actor1geo_lat
+            Type: float
+          - Name: actor1geo_long
+            Type: float
+          - Name: actor1geo_featureid
+            Type: int
+          - Name: actor2geo_type
+            Type: int
+          - Name: actor2geo_fullname
+            Type: string
+          - Name: actor2geo_countrycode
+            Type: string
+          - Name: actor2geo_adm1code
+            Type: string
+          - Name: actor2geo_lat
+            Type: float
+          - Name: actor2geo_long
+            Type: float
+          - Name: actor2geo_featureid
+            Type: int
+          - Name: actiongeo_type
+            Type: int
+          - Name: actiongeo_fullname
+            Type: string
+          - Name: actiongeo_countrycode
+            Type: string
+          - Name: actiongeo_adm1code
+            Type: string
+          - Name: actiongeo_lat
+            Type: float
+          - Name: actiongeo_long
+            Type: float
+          - Name: actiongeo_featureid
+            Type: int
+          - Name: dateadded
+            Type: int
+          - Name: sourceurl
+            Type: string
+          Location: s3://gdelt-open-data/events
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Compressed: false
+          NumberOfBuckets: -1
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+            Parameters:
+              field.delim: "\t"
+              serialization.format: "\t"
+          BucketColumns: []
+          SortColumns: []
+          Parameters: {}
+          SkewedInfo:
+            SkewedColumnNames: []
+            SkewedColumnValues: []
+            SkewedColumnValueLocationMaps: {}
+          StoredAsSubDirectories: false
+        PartitionKeys: []
+        TableType: EXTERNAL_TABLE
+        Parameters:
+          EXTERNAL: 'TRUE'
+          transient_lastDdlTime: '1573814182'
+
