@@ -331,11 +331,11 @@ Resources:
         SubnetIds:
           - !Ref privateSubnetA
 
-  GreetingApi:
+  GltdApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: Greeting API
-      Description: API used for Greeting requests
+      Name: Gltd API
+      Description: API used for Gltd requests
       FailOnWarnings: true
   LambdaPermission:
     Type: AWS::Lambda::Permission
@@ -354,7 +354,7 @@ Resources:
           - ":"
           - Ref: AWS::AccountId
           - ":"
-          - Ref: GreetingApi
+          - Ref: GltdApi
           - "/*"
   ApiGatewayCloudWatchLogsRole:
     Type: AWS::IAM::Role
@@ -390,7 +390,7 @@ Resources:
         Fn::GetAtt:
         - ApiGatewayCloudWatchLogsRole
         - Arn
-  GreetingApiStage:
+  GltdApiStage:
     DependsOn:
     - ApiGatewayAccount
     Type: AWS::ApiGateway::Stage
@@ -403,27 +403,27 @@ Resources:
         LoggingLevel: INFO
         ResourcePath: "/*"
       RestApiId:
-        Ref: GreetingApi
+        Ref: GltdApi
       StageName: LATEST
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
-    - GreetingRequest
+    - GltdRequest
     Properties:
       RestApiId:
-        Ref: GreetingApi
+        Ref: GltdApi
       StageName: DummyStage
-  GreetingResource:
+  GltdResource:
     Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId:
-        Ref: GreetingApi
+        Ref: GltdApi
       ParentId:
         Fn::GetAtt:
-        - GreetingApi
+        - GltdApi
         - RootResourceId
       PathPart: storesales
-  GreetingRequest:
+  GltdRequest:
     DependsOn: LambdaPermission
     Type: AWS::ApiGateway::Method
     Properties:
@@ -454,9 +454,9 @@ Resources:
       RequestParameters:
         method.request.querystring.name: false
       ResourceId:
-        Ref: GreetingResource
+        Ref: GltdResource
       RestApiId:
-        Ref: GreetingApi
+        Ref: GltdApi
       MethodResponses:
       - StatusCode: 200
 
@@ -480,10 +480,71 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              -
-                Effect: "Allow"
-                Action: "s3:*"
-                Resource: "*"
+              - Effect: Allow
+                Action:
+                - glue:*
+                - s3:GetBucketLocation
+                - s3:ListBucket
+                - s3:ListAllMyBuckets
+                - s3:GetBucketAcl
+                - ec2:DescribeVpcEndpoints
+                - ec2:DescribeRouteTables
+                - ec2:CreateNetworkInterface
+                - ec2:DeleteNetworkInterface
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DescribeSecurityGroups
+                - ec2:DescribeSubnets
+                - ec2:DescribeVpcAttribute
+                - iam:ListRolePolicies
+                - iam:GetRole
+                - iam:GetRolePolicy
+                - cloudwatch:PutMetricData
+                Resource:
+                - "*"
+              - Effect: Allow
+                Action:
+                - s3:CreateBucket
+                Resource:
+                - arn:aws:s3:::aws-glue-*
+              - Effect: Allow
+                Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:DeleteObject
+                Resource:
+                - arn:aws:s3:::aws-glue-*/*
+                - arn:aws:s3:::*/*aws-glue-*/*
+              - Effect: Allow
+                Action:
+                - s3:GetObject
+                Resource:
+                - arn:aws:s3:::crawler-public*
+                - arn:aws:s3:::aws-glue-*
+              - Effect: Allow
+                Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - logs:AssociateKmsKey
+                Resource:
+                - arn:aws:logs:*:*:/aws-glue/*
+              - Effect: Allow
+                Action:
+                - ec2:CreateTags
+                - ec2:DeleteTags
+                Condition:
+                  ForAllValues:StringEquals:
+                    aws:TagKeys:
+                    - aws-glue-service-resource
+                Resource:
+                - arn:aws:ec2:*:*:network-interface/*
+                - arn:aws:ec2:*:*:security-group/*
+                - arn:aws:ec2:*:*:instance/*
+              - Effect: Allow
+                Action:
+                - s3:*
+                Resource:
+                - arn:aws:s3:::gdelt-open-data*
 
   gdeltDatabase:
     Type: AWS::Glue::Database
@@ -501,7 +562,7 @@ Resources:
       DatabaseName: gdelt
       Targets:
         S3Targets:
-          - Path: "s3://gdelt-open-data"
+          - Path: "s3://gdelt-open-data/"
       SchemaChangePolicy:
         UpdateBehavior: "UPDATE_IN_DATABASE"
         DeleteBehavior: "LOG"
